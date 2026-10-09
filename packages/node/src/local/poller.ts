@@ -58,7 +58,7 @@ export class FlagConfigPoller
         try {
           await this.update(onChange);
         } catch (e) {
-          this.logger.debug('[Experiment] flag config update failed', e);
+          this.logger.error('[Experiment] flag config update failed', e);
         }
       }, this.pollingIntervalMillis);
 

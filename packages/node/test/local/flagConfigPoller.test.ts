@@ -2,6 +2,7 @@ import {
   FlagConfigFetcher,
   FlagConfigPoller,
   InMemoryFlagConfigCache,
+  LogLevel,
 } from 'src/index';
 import { SdkCohortApi } from 'src/local/cohort/cohort-api';
 import { CohortFetcher } from 'src/local/cohort/fetcher';
@@ -198,4 +199,42 @@ test('flagConfig poller initial success, polling flag success, cohort failed, an
   expect(await poller.cache.getAll()).toStrictEqual(NEW_FLAGS);
 
   poller.stop();
+});
+
+test('flagConfig poller logs a failed background poll at error', async () => {
+  const loggerProvider = {
+    verbose: jest.fn(),
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  };
+  const poller = new FlagConfigPoller(
+    new FlagConfigFetcher(
+      'key',
+      new MockHttpClient(async () => ({ status: 200, body: '' })),
+    ),
+    new InMemoryFlagConfigCache(),
+    new InMemoryCohortStorage(),
+    undefined,
+    100,
+    LogLevel.Error,
+    loggerProvider,
+  );
+  let flagPolled = 0;
+  jest
+    .spyOn(FlagConfigFetcher.prototype, 'fetch')
+    .mockImplementation(async () => {
+      if (++flagPolled == 1) return FLAGS;
+      throw new Error('poll failed');
+    });
+
+  await poller.start();
+  await sleep(250);
+  poller.stop();
+
+  expect(loggerProvider.error).toHaveBeenCalledWith(
+    '[Experiment] flag config update failed',
+    [expect.any(Error)],
+  );
 });
